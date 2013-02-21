@@ -1,6 +1,6 @@
 MRuby::Gem::Specification.new('mruby-xmlrpc') do |spec|
   spec.license = 'MIT'
-  spec.authors = ['Shohei Fujii <fujii.shohei@gmail.com']
+  spec.authors = ['Shohei Fujii <fujii.shohei@gmail.com>']
 
   # more options
 
