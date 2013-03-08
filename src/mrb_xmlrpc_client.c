@@ -3,7 +3,6 @@
 #include <mruby/hash.h>
 #include <mruby/string.h>
 #include <mruby/data.h>
-//#include <mruby/struct.h>
 #include <mruby/class.h>
 #include <mruby/variable.h>
 
@@ -50,8 +49,7 @@ mrb_xmlrpc_env_wrap(mrb_state *mrb, struct RClass *xmlrpc_class, xmlrpc_env *mme
 
 static mrb_value
 mrb_xmlrpc_env_make(mrb_state *mrb,mrb_value self){
-    xmlrpc_env* env;
-    env = (xmlrpc_env*) mrb_malloc(mrb,sizeof(xmlrpc_env));
+    xmlrpc_env* env = (xmlrpc_env*) mrb_malloc(mrb,sizeof(xmlrpc_env));
     xmlrpc_env_init(env);
     xmlrpc_client_init2(env,XMLRPC_CLIENT_NO_FLAGS,MRUBY_XMLRPC_NAME,MRUBY_XMLRPC_VERSION,NULL,0);
     xmlrpc_raise_if_fault(mrb,env);
@@ -60,23 +58,183 @@ mrb_xmlrpc_env_make(mrb_state *mrb,mrb_value self){
 /*}}}*/
 
 // xmlrpc <-> mrb_xmlrpc converter /*{{{*/
-static void
-xmlrpc_value_to_mrb_value(mrb_state* mrb, xmlrpc_value* xmlrpc_val, mrb_value* mrb_val){
-}
+static mrb_value
+xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrpc_value* xmlrpc_val){/*{{{*/
+    mrb_value ret;
+    switch (xmlrpc_value_type(xmlrpc_val)) {
+        case XMLRPC_TYPE_INT:
+            {
+                int int_val;
+                xmlrpc_read_int(env, xmlrpc_val, &int_val);
+                ret = mrb_fixnum_value((mrb_int)int_val);
+                break;
+            }
+        case XMLRPC_TYPE_I8:
+            {
+                long long int8_val;
+                xmlrpc_read_i8(env, xmlrpc_val, &int8_val);
+                ret = mrb_fixnum_value((mrb_int)int8_val);
+                break;
+            }
+        case XMLRPC_TYPE_DOUBLE:
+            {
+                double double_val;
+                xmlrpc_read_double(env, xmlrpc_val, &double_val);
+                ret = mrb_float_value(double_val);
+                break;
+            }
+        case XMLRPC_TYPE_BOOL:
+            {
+                xmlrpc_bool bool_val;
+                xmlrpc_read_bool(env, xmlrpc_val, &bool_val);
+                if (bool_val) {
+                    ret = mrb_true_value();
+                } else {
+                    ret = mrb_false_value();
+                }
+                break;
+            }
+        case XMLRPC_TYPE_DATETIME:
+            {
+                time_t time_val;
+                unsigned int usec_val;
+                xmlrpc_read_datetime_usec(env, xmlrpc_val, &time_val, &usec_val);
+                struct RClass* time_class = mrb_class_get(mrb,"TIME");
+                mrb_value time_instance = mrb_class_new_instance(mrb, 0 /*argc*/, NULL /*argv*/,time_class);
+                ret = mrb_funcall(mrb, time_instance, "at", 2, mrb_fixnum_value(time_val), mrb_fixnum_value(usec_val));
+                break;
+            }
+        case XMLRPC_TYPE_STRING:
+            {
+                const char* str_val;
+                xmlrpc_read_string(env, xmlrpc_val, &str_val);
+                ret = mrb_str_new_cstr(mrb, str_val);
+                mrb_free(mrb, (void *)str_val);
+                break;
+            }
+        case XMLRPC_TYPE_BASE64:
+            {
+                size_t length;
+                const unsigned char * bytestring;
+                xmlrpc_read_base64(env, xmlrpc_val, &length, &bytestring);
+                //struct RClass* base64_module = mrb_class_get(mrb,"Base64");
+                //ret = mrb_funcall(mrb, base64_class, "decode", 1, mrb_str_new_cstr(mrb, bytestring));
+                ret = mrb_str_new_cstr(mrb, (const char*) bytestring);
+                break;
+            }
+        case XMLRPC_TYPE_NIL:
+            ret = mrb_nil_value();
+            break;
+        case XMLRPC_TYPE_STRUCT:
+            {
+                ret = mrb_hash_new(mrb);
+                mrb_value m_key;
+                mrb_value m_value;
+                xmlrpc_value *xr_key;
+                xmlrpc_value *xr_value;
+                int n = xmlrpc_struct_size(env, xmlrpc_val);
+                int i;
+                for (i = 0; i < n; i++) {
+                    xmlrpc_struct_get_key_and_value(env, xmlrpc_val, i, &xr_key, &xr_value);
+                    m_key = xmlrpc_value_to_mrb_value(mrb, self, env, xr_key);
+                    m_value = xmlrpc_value_to_mrb_value(mrb, self, env, xr_value);
+                    mrb_hash_set(mrb, ret, m_key, m_value);
+                }
+                xmlrpc_DECREF(xr_key);
+                xmlrpc_DECREF(xr_value);
+                break;
+            }
+        case XMLRPC_TYPE_ARRAY:
+            {
+                xmlrpc_value *xr_elm;
+                mrb_value mrb_elm;
+                ret = mrb_ary_new(mrb);
+                int n = xmlrpc_array_size(env, xmlrpc_val);
+                int i;
+                for (i = 0; i < n; i++) {
+                    xmlrpc_array_read_item(env, xmlrpc_val, i, &xr_elm);
+                    mrb_elm = xmlrpc_value_to_mrb_value(mrb, self, env, xr_elm);
+                    mrb_ary_push(mrb, ret, mrb_elm);
+                }
+                xmlrpc_DECREF(xr_elm);
+                break;
+            }
+        default:
+            mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+            break;
+    }
+    return ret;
+}/*}}}*/
 
-static void
-mrb_value_to_xmlrpc_value(mrb_state* mrb, mrb_value * mrb_val, xmlrpc_value * xmlrpc_val){
-}
+static xmlrpc_value *
+mrb_value_to_xmlrpc_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, mrb_value mrb_val){/*{{{*/
+    xmlrpc_value * ret;
+    switch (mrb_type(mrb_val)) {
+        case MRB_TT_FIXNUM:
+            ret =  xmlrpc_int_new(env, mrb_fixnum(mrb_val));
+            break;
+        case MRB_TT_FLOAT:
+            ret = xmlrpc_double_new(env, mrb_float(mrb_val));
+            break;
+        case MRB_TT_SYMBOL:
+            //ret = xmlrpc_string_new(env, mrb_str_to_cstr(mrb, mrb_sym_to_s(mrb, mrb_val)));
+            ret = xmlrpc_string_new(env, mrb_str_to_cstr(mrb, mrb_funcall(mrb, mrb_val, "to_s", 0, NULL)));
+            break;
+        case MRB_TT_STRING:
+            ret = xmlrpc_string_new(env, mrb_str_to_cstr(mrb, mrb_val));
+            break;
+        case MRB_TT_ARRAY:
+            {
+                ret = xmlrpc_array_new(env);
+                int len = mrb_ary_len(mrb, mrb_val);
+                int i;
+                for (i = 0; i < len; i++) {
+                    int ai = mrb_gc_arena_save(mrb);
+                    xmlrpc_value * xr_item;
+                    mrb_value m_item;
+                    m_item = mrb_ary_ref(mrb, mrb_val, i);
+                    xr_item = mrb_value_to_xmlrpc_value(mrb, self, env, m_item);
+                    xmlrpc_array_append_item(env, ret, xr_item);
+                    xmlrpc_DECREF(xr_item);
+                    mrb_gc_arena_restore(mrb, ai);
+                }
+                break;
+            }
+        case MRB_TT_HASH:
+            {
+                ret = xmlrpc_struct_new(env);
+                mrb_value keys = mrb_hash_keys(mrb, mrb_val);
+                int n = mrb_ary_len(mrb, keys);
+                int i;
+                for (i = 0; i < n; i++) {
+                    int ai = mrb_gc_arena_save(mrb);
+                    mrb_value m_key;
+                    mrb_value m_value;
+                    m_key = mrb_ary_ref(mrb, keys, i);
+                    m_value = mrb_hash_get(mrb, mrb_val, m_key);
+                    xmlrpc_struct_set_value(env, ret, mrb_str_to_cstr(mrb, mrb_funcall(mrb, m_key, "to_s", 0, NULL)),
+                            mrb_value_to_xmlrpc_value(mrb, self, env, m_value));
+                    mrb_gc_arena_restore(mrb, ai);
+                }
+                break;
+            }
+        default:
+            mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+            ret = xmlrpc_nil_new(env);
+            break;
+    }
+    return ret;
+}/*}}}*/
 /*}}}*/
 
 // *object* /*{{{*/
 static struct RClass *
-mrb_xmlrpc_client_class(mrb_state *mrb, mrb_value self)
+mrb_xmlrpc_client_class(mrb_state *mrb, mrb_value self)/*{{{*/
 {
     struct RClass* _module_xmlrpc = mrb_class_get(mrb,"XMLRPC");
     struct RClass* _class_xmlrpc_client = mrb_class_ptr(mrb_const_get(mrb,mrb_obj_value(_module_xmlrpc),mrb_intern(mrb,"Client")));
     return _class_xmlrpc_client;
-}
+}/*}}}*/
 
 static mrb_value
 mrb_xmlrpc_client_init(mrb_state *mrb, mrb_value self) {/*{{{*/
@@ -114,6 +272,7 @@ static mrb_value
 mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
     mrb_value method;
     mrb_value *argv;
+    mrb_value result_mrbval;
     int argc;
 
     xmlrpc_value * root_xml; //Array
@@ -121,21 +280,15 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
 
     mrb_get_args(mrb,"S|*",&method,&argv,&argc);
 
-    //mrb_value mrbenv = OBJECT_GET(mrb,self,"env");
     xmlrpc_env* env = (xmlrpc_env*)DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "env")));
     
     root_xml = xmlrpc_array_new(env);
     int i = 0;
     for (i = 0; i < argc; i++) {
-        switch (mrb_type(argv[i])) {
-            case MRB_TT_FIXNUM:
-                xmlrpc_int_new(env,argv[i].value.i);
-                break;
-            case MRB_TT_FLOAT:
-                break;
-            default:
-                break;
-        }
+        xmlrpc_value *xr_elm;
+        xr_elm = mrb_value_to_xmlrpc_value(mrb, self, env, argv[i]);
+        xmlrpc_array_append_item(env, root_xml, xr_elm);
+        xmlrpc_DECREF(xr_elm);
     }
 
     // setup hostname *{{{*/
@@ -165,24 +318,20 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
     strcat(hostname_full, port);
     /*}}}*/
 
-    xmlrpc_value * result = xmlrpc_client_call(env,
-            hostname_full,
-            mrb_str_to_cstr(mrb,method),
-            "(ii)",(xmlrpc_int32) 5,(xmlrpc_int32) 3);
+    result_xml = xmlrpc_client_call_params(env, hostname_full, RSTRING_PTR(method),root_xml);
     xmlrpc_raise_if_fault(mrb,env);
-    xmlrpc_int32 sum;
-    xmlrpc_read_int(env,result,&sum);
-    xmlrpc_raise_if_fault(mrb,env);
-    mrb_warn("add result:%d\n", sum);
-//    xmlrpc_client_call2f(//&env,
-//            mrb_
-//            mrb_iv_get(mrb,)
-//            ,RSTRING_PTR(method),root_xml,&result_xml);
+
+    result_mrbval = xmlrpc_value_to_mrb_value(mrb, self, env, result_xml);
+
+//    xmlrpc_int32 sum;
+//    xmlrpc_read_int(env,result,&sum);
+//    xmlrpc_raise_if_fault(mrb,env);
+//    mrb_warn("add result:%d\n", sum);
 
     mrb_free(mrb,hostname_full);
     xmlrpc_DECREF(root_xml);
-    //xmlrpc_DECREF(result_xml);
-    return mrb_nil_value();
+    xmlrpc_DECREF(result_xml);
+    return result_mrbval;
 }
 /*}}}*/
 
