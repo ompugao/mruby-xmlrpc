@@ -30,30 +30,41 @@ xmlrpc_raise_if_fault(mrb_state *mrb,xmlrpc_env * const env)
     }
 }
 
-// xmlrpc_env container setup /*{{{*/
+// xmlrpc_client_context container setup /*{{{*/
+
+struct mrb_xmlrpc_client_context {
+    xmlrpc_env *env;
+    xmlrpc_client *client;
+};
 
 static void
-mrb_xmlrpc_env_free(mrb_state *mrb, void *ptr)
+mrb_xmlrpc_client_context_free(mrb_state *mrb, void *ptr)
 {
-    xmlrpc_env_clean(ptr);
-    //mrb_free(mrb,ptr);
+    xmlrpc_env_clean((xmlrpc_env *)((struct mrb_xmlrpc_client_context*)ptr)->env);
+    xmlrpc_client_destroy((xmlrpc_client *)((struct mrb_xmlrpc_client_context*)ptr)->client);
+    mrb_free(mrb,ptr);
 }
 
-static struct mrb_data_type mrb_xmlrpc_env_type = {"mrb_xmlrpc_env" , mrb_xmlrpc_env_free };
+static struct mrb_data_type mrb_xmlrpc_client_context_type = {"mrb_xmlrpc_client_context" , mrb_xmlrpc_client_context_free };
 
 static mrb_value
-mrb_xmlrpc_env_wrap(mrb_state *mrb, struct RClass *xmlrpc_class, xmlrpc_env *mme)
+mrb_xmlrpc_client_context_wrap(mrb_state *mrb, struct RClass *xmlrpc_class, struct mrb_xmlrpc_client_context *mxcc)
 {
-    return mrb_obj_value(Data_Wrap_Struct(mrb, xmlrpc_class, &mrb_xmlrpc_env_type, mme));
+    return mrb_obj_value(Data_Wrap_Struct(mrb, xmlrpc_class, &mrb_xmlrpc_client_context_type, mxcc));
 }
 
 static mrb_value
-mrb_xmlrpc_env_make(mrb_state *mrb,mrb_value self){
-    xmlrpc_env* env = (xmlrpc_env*) mrb_malloc(mrb,sizeof(xmlrpc_env));
-    xmlrpc_env_init(env);
-    xmlrpc_client_init2(env,XMLRPC_CLIENT_NO_FLAGS,MRUBY_XMLRPC_NAME,MRUBY_XMLRPC_VERSION,NULL,0);
-    xmlrpc_raise_if_fault(mrb,env);
-    return mrb_xmlrpc_env_wrap(mrb, mrb_obj_class(mrb,self), env);
+mrb_xmlrpc_client_context_make(mrb_state *mrb,mrb_value self){
+    struct mrb_xmlrpc_client_context* mxcc;
+    mxcc = (struct mrb_xmlrpc_client_context*) mrb_malloc(mrb, sizeof(struct mrb_xmlrpc_client_context));
+    mxcc->env = (xmlrpc_env*) mrb_malloc(mrb,sizeof(xmlrpc_env));
+
+    xmlrpc_env_init(mxcc->env);
+    xmlrpc_client_setup_global_const(mxcc->env);
+    xmlrpc_client_create(mxcc->env, XMLRPC_CLIENT_NO_FLAGS, MRUBY_XMLRPC_NAME, MRUBY_XMLRPC_VERSION, NULL, 0,
+                                             (xmlrpc_client**)&(mxcc->client));
+    xmlrpc_raise_if_fault(mrb,mxcc->env);
+    return mrb_xmlrpc_client_context_wrap(mrb, mrb_obj_class(mrb,self), mxcc);
 }
 /*}}}*/
 
@@ -253,7 +264,7 @@ mrb_xmlrpc_client_init(mrb_state *mrb, mrb_value self) {/*{{{*/
     mrb_value client;
     client = mrb_class_new_instance(mrb, 0 /*argc*/, NULL /*argv*/,mrb_xmlrpc_client_class(mrb,self));
 
-    OBJECT_SET(mrb,client,"env",mrb_xmlrpc_env_make(mrb,client));
+    OBJECT_SET(mrb,client,"context",mrb_xmlrpc_client_context_make(mrb,client));
     OBJECT_SET(mrb,client,"host",host);
     OBJECT_SET(mrb,client,"path",path);
     OBJECT_SET(mrb,client,"port",mrb_fixnum_value(port));
@@ -280,7 +291,9 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
 
     mrb_get_args(mrb,"S|*",&method,&argv,&argc);
 
-    xmlrpc_env* env = (xmlrpc_env*)DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "env")));
+    struct mrb_xmlrpc_client_context *mxcc = (struct mrb_xmlrpc_client_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "context"))));
+    xmlrpc_env* env = (xmlrpc_env*)(mxcc->env);
+    xmlrpc_client* client = (xmlrpc_client*)(mxcc->client);
     
     root_xml = xmlrpc_array_new(env);
     int i = 0;
@@ -318,17 +331,14 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
     strcat(hostname_full, port);
     /*}}}*/
 
-    result_xml = xmlrpc_client_call_params(env, hostname_full, RSTRING_PTR(method),root_xml);
+    xmlrpc_server_info *server_info = xmlrpc_server_info_new(env, hostname_full);
+    xmlrpc_client_call2(env,client, server_info, RSTRING_PTR(method),root_xml, &result_xml);
     xmlrpc_raise_if_fault(mrb,env);
 
     result_mrbval = xmlrpc_value_to_mrb_value(mrb, self, env, result_xml);
 
-//    xmlrpc_int32 sum;
-//    xmlrpc_read_int(env,result,&sum);
-//    xmlrpc_raise_if_fault(mrb,env);
-//    mrb_warn("add result:%d\n", sum);
-
     mrb_free(mrb,hostname_full);
+    xmlrpc_server_info_free(server_info);
     xmlrpc_DECREF(root_xml);
     xmlrpc_DECREF(result_xml);
     return result_mrbval;
