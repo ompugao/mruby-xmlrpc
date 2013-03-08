@@ -146,13 +146,15 @@ xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrp
                 int n = xmlrpc_struct_size(env, xmlrpc_val);
                 int i;
                 for (i = 0; i < n; i++) {
+                    int ai = mrb_gc_arena_save(mrb);
                     xmlrpc_struct_get_key_and_value(env, xmlrpc_val, i, &xr_key, &xr_value);
                     m_key = xmlrpc_value_to_mrb_value(mrb, self, env, xr_key);
                     m_value = xmlrpc_value_to_mrb_value(mrb, self, env, xr_value);
                     mrb_hash_set(mrb, ret, m_key, m_value);
+                    mrb_gc_arena_restore(mrb, ai);
                 }
-                xmlrpc_DECREF(xr_key);
-                xmlrpc_DECREF(xr_value);
+                //xmlrpc_DECREF(xr_key);
+                //xmlrpc_DECREF(xr_value);
                 break;
             }
         case XMLRPC_TYPE_ARRAY:
@@ -163,9 +165,11 @@ xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrp
                 int n = xmlrpc_array_size(env, xmlrpc_val);
                 int i;
                 for (i = 0; i < n; i++) {
+                    int ai = mrb_gc_arena_save(mrb);
                     xmlrpc_array_read_item(env, xmlrpc_val, i, &xr_elm);
                     mrb_elm = xmlrpc_value_to_mrb_value(mrb, self, env, xr_elm);
                     mrb_ary_push(mrb, ret, mrb_elm);
+                    mrb_gc_arena_restore(mrb, ai);
                 }
                 xmlrpc_DECREF(xr_elm);
                 break;
@@ -340,7 +344,7 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
     mrb_free(mrb,hostname_full);
     xmlrpc_server_info_free(server_info);
     xmlrpc_DECREF(root_xml);
-    xmlrpc_DECREF(result_xml);
+    //xmlrpc_DECREF(result_xml);
     return result_mrbval;
 }
 /*}}}*/
