@@ -110,9 +110,8 @@ xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrp
                 time_t time_val;
                 unsigned int usec_val;
                 xmlrpc_read_datetime_usec(env, xmlrpc_val, &time_val, &usec_val);
-                struct RClass* time_class = mrb_class_get(mrb,"TIME");
-                mrb_value time_instance = mrb_class_new_instance(mrb, 0 /*argc*/, NULL /*argv*/,time_class);
-                ret = mrb_funcall(mrb, time_instance, "at", 2, mrb_fixnum_value(time_val), mrb_fixnum_value(usec_val));
+                mrb_value time_class = mrb_vm_const_get(mrb, mrb_intern(mrb, "Time"));
+                ret = mrb_funcall(mrb, time_class, "at", 2 , mrb_float_value(time_val), mrb_float_value(usec_val));
                 break;
             }
         case XMLRPC_TYPE_STRING:
@@ -234,6 +233,11 @@ mrb_value_to_xmlrpc_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, mrb_v
                 break;
             }
         default:
+            if (!strcmp(mrb_obj_classname(mrb, mrb_val), "Time")) {
+                ret = xmlrpc_datetime_new_sec(env,
+                        mrb_fixnum(mrb_funcall(mrb, mrb_val, "to_i", 0, NULL)));
+                break;
+            }
             mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
             ret = xmlrpc_nil_new(env);
             break;
@@ -344,7 +348,7 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
     mrb_free(mrb,hostname_full);
     xmlrpc_server_info_free(server_info);
     xmlrpc_DECREF(root_xml);
-    //xmlrpc_DECREF(result_xml);
+    xmlrpc_DECREF(result_xml);
     return result_mrbval;
 }
 /*}}}*/
