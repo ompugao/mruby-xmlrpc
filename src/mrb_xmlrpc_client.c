@@ -192,8 +192,8 @@ mrb_value_to_xmlrpc_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, mrb_v
             ret = xmlrpc_double_new(env, mrb_float(mrb_val));
             break;
         case MRB_TT_SYMBOL:
-            //ret = xmlrpc_string_new(env, mrb_str_to_cstr(mrb, mrb_sym_to_s(mrb, mrb_val)));
-            ret = xmlrpc_string_new(env, mrb_str_to_cstr(mrb, mrb_funcall(mrb, mrb_val, "to_s", 0, NULL)));
+            ret = xmlrpc_string_new(env, mrb_sym2name(mrb, mrb_symbol(mrb_val)));
+            //ret = xmlrpc_string_new(env, mrb_str_to_cstr(mrb, mrb_funcall(mrb, mrb_val, "to_s", 0, NULL)));
             break;
         case MRB_TT_STRING:
             ret = xmlrpc_string_new(env, mrb_str_to_cstr(mrb, mrb_val));
