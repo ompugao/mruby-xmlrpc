@@ -324,15 +324,16 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
     // strip the last '/'
     char* hostname = mrb_str_to_cstr(mrb,mrb_iv_get(mrb, self, mrb_intern(mrb, "host")));
     if ( hostname[strlen(hostname)-1] == '/') {
-        hostname[strlen(hostname)-1] = NULL;
+        hostname[strlen(hostname)-1] = '\0';
     }
+
     // get port string
     char* port = mrb_str_to_cstr(mrb,mrb_funcall(mrb,mrb_iv_get(mrb, self, mrb_intern(mrb, "port")),"to_s",0,NULL));
 
     // concat
     char* hostname_full;
     hostname_full = (char*) mrb_malloc(mrb, sizeof(char)*(strlen(protocol) + strlen(hostname) + strlen(port)+3));
-    *hostname_full = NULL;
+    *hostname_full = '\0';
     strcat(hostname_full, protocol);
     strcat(hostname_full, hostname);
     strcat(hostname_full, ":");
