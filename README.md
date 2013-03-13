@@ -1,4 +1,4 @@
-# mruby-xmlrpc-client
+# mruby-xmlrpc
 
 This gem is alpha version yet. Please send me a pull-request.
 This gem depends on mruby-time and libxmlrpc-c.
