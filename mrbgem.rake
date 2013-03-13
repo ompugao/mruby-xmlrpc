@@ -1,4 +1,4 @@
-MRuby::Gem::Specification.new('mruby-xmlrpc-client') do |spec|
+MRuby::Gem::Specification.new('mruby-xmlrpc') do |spec|
   spec.license = 'MIT'
   spec.authors = ['Shohei Fujii <fujii.shohei@gmail.com>']
   #spec.description = "The version of libxmlrpc-c is 1.16.33-3.1ubuntu5.1"
