@@ -10,8 +10,7 @@
 #include <xmlrpc-c/client.h>
 #include <string.h>
 
-#define MRUBY_XMLRPC_NAME "mruby xmlrpc client"
-#define MRUBY_XMLRPC_VERSION "0.0.1"
+#include "mrb_xmlrpc.h"
 
 #define OBJECT_GET(mrb, instance, name) \
   mrb_iv_get(mrb, instance, mrb_intern(mrb, name))
@@ -29,7 +28,7 @@ xmlrpc_raise_if_fault(mrb_state *mrb,xmlrpc_env * const env)
         mrb_raisef(mrb, E_RUNTIME_ERROR, "XMLRPC ERROR: %s (%d)",env->fault_string,env->fault_code); \
     }
 }
-
+// ******** client ********
 // xmlrpc_client_context container setup /*{{{*/
 
 struct mrb_xmlrpc_client_context {
@@ -395,8 +394,153 @@ mrb_xmlrpc_client_set_path(mrb_state* mrb, mrb_value self) {
 }/*}}}*/
 /*}}}*/
 
+// ******** server ********
+
+static struct RClass *
+mrb_xmlrpc_server_class(mrb_state *mrb, mrb_value self) {/*{{{*/
+    struct RClass* _module_xmlrpc = mrb_class_get(mrb,"XMLRPC");
+    struct RClass* _class_xmlrpc_server = mrb_class_ptr(mrb_const_get(mrb,mrb_obj_value(_module_xmlrpc),mrb_intern(mrb,"Server")));
+    return _class_xmlrpc_server;
+}/*}}}*/
+
+// xmlrpc_server_context container setup /*{{{*/
+
+struct mrb_xmlrpc_server_context {
+    xmlrpc_env *env;
+};
+
+static void
+mrb_xmlrpc_server_context_free(mrb_state *mrb, void *ptr)
+{
+    xmlrpc_env_clean((xmlrpc_env *)((struct mrb_xmlrpc_server_context*)ptr)->env);
+    mrb_free(mrb,ptr);
+}
+
+static struct mrb_data_type mrb_xmlrpc_server_context_type = {"mrb_xmlrpc_server_context" , mrb_xmlrpc_server_context_free };
+
+static mrb_value
+mrb_xmlrpc_server_context_wrap(mrb_state *mrb, struct RClass *xmlrpc_class, struct mrb_xmlrpc_server_context *mxcc)
+{
+    return mrb_obj_value(Data_Wrap_Struct(mrb, xmlrpc_class, &mrb_xmlrpc_server_context_type, mxcc));
+}
+
+static mrb_value
+mrb_xmlrpc_server_context_make(mrb_state *mrb,mrb_value self){
+    struct mrb_xmlrpc_server_context* mxsc;
+    mxsc = (struct mrb_xmlrpc_server_context*) mrb_malloc(mrb, sizeof(struct mrb_xmlrpc_server_context));
+    mxsc->env = (xmlrpc_env*) mrb_malloc(mrb,sizeof(xmlrpc_env));
+
+    xmlrpc_env_init(mxsc->env);
+    xmlrpc_raise_if_fault(mrb,mxsc->env);
+    return mrb_xmlrpc_server_context_wrap(mrb, mrb_obj_class(mrb,self), mxsc);
+}
+/*}}}*/
+
+// new(port=8080, host="127.0.0.1", maxConnections=4, stdlog=$stdout, *a)
+static mrb_value
+mrb_xmlrpc_server_init(mrb_state *mrb, mrb_value self) {/*{{{*/
+    mrb_int port = 8080;
+    mrb_value host = mrb_str_new_cstr(mrb, "127.0.0.1");
+    mrb_int maxConnections = 4;
+    mrb_value stdlog = mrb_gv_get(mrb, mrb_intern(mrb, "$stdout"));
+    mrb_value rest_argv;
+    mrb_int rest_argc;
+
+    mrb_get_args(mrb,"|iSioa",&port,&host,&maxConnections,&stdlog,&rest_argv,&rest_argc);
+    mrb_value server = mrb_class_new_instance(mrb, 0, NULL, mrb_xmlrpc_server_class(mrb, self));
+    OBJECT_SET(mrb, server, "port", mrb_fixnum_value(port));
+    OBJECT_SET(mrb, server, "host", host);
+    OBJECT_SET(mrb, server, "maxConnections", mrb_fixnum_value(maxConnections));
+    OBJECT_SET(mrb, server, "stdlog", stdlog);
+    OBJECT_SET(mrb, server, "context", mrb_xmlrpc_server_context_make(mrb, self));
+
+    // mrb_funcall(mrb, server, "init_uv", 2, mrb_fixnum_value(port), host);
+    return server;
+}/*}}}*/
+
+static mrb_value
+mrb_xmlrpc_server_add_handler(mrb_state *mrb, mrb_value self) {/*{{{*/
+    mrb_value proc = mrb_nil_value();
+    mrb_value name;
+    /*int argc;*/
+    /*mrb_value* argv;*/
+    /*mrb_get_args(mrb, "&*", &proc, &argv, &argc);*/
+    mrb_get_args(mrb, "S&", &name, &proc);
+    mrb_value handlers = OBJECT_GET(mrb, self, "handlers");
+    if (mrb_nil_p(handlers)) {
+        handlers = mrb_hash_new(mrb);
+    }
+    mrb_funcall(mrb, handlers, "[]=", 2, name, proc);
+    OBJECT_SET(mrb, self, "handlers", handlers);
+    return mrb_nil_value();
+} /*}}}*/
+
+static mrb_value
+mrb_xmlrpc_server_set_default_handler(mrb_state *mrb, mrb_value self) {/*{{{*/
+    mrb_value proc = mrb_nil_value();
+    mrb_get_args(mrb, "&", &proc);
+    OBJECT_SET(mrb, self, "default_handler", proc);
+    return mrb_nil_value();
+}/*}}}*/
+
+// Getter / Setter /*{{{*/
+static mrb_value
+mrb_xmlrpc_server_get_host(mrb_state* mrb, mrb_value self) {
+    return OBJECT_GET(mrb,self,"host");
+}
+
+static mrb_value
+mrb_xmlrpc_server_get_port(mrb_state* mrb, mrb_value self) {
+    return OBJECT_GET(mrb,self,"port");
+}
+
+static mrb_value
+mrb_xmlrpc_server_get_maxConnections(mrb_state* mrb, mrb_value self) {
+    return OBJECT_GET(mrb,self,"maxConnections");
+}
+
+static mrb_value
+mrb_xmlrpc_server_get_handlers(mrb_state* mrb, mrb_value self) {
+    return OBJECT_GET(mrb,self,"handlers");
+}
+/*}}}*/
+
+static mrb_value
+mrb_xmlrpc_server_parse_xmlrpc_call(mrb_state *mrb, mrb_value self) {/*{{{*/
+    const char* xml_str;
+    mrb_int xml_str_len;
+    mrb_value mrb_method;
+    mrb_value mrb_param;
+    mrb_value mrb_ret = mrb_ary_new(mrb);
+    const char *xr_method;
+    xmlrpc_value *xr_param;
+    struct mrb_xmlrpc_server_context *mxsc = (struct mrb_xmlrpc_server_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "context"))));
+
+    mrb_get_args(mrb, "s", &xml_str, &xml_str_len);
+    xmlrpc_parse_call(mxsc->env, xml_str, strlen(xml_str), &xr_method, &xr_param);
+
+    mrb_method = mrb_str_new_cstr(mrb, xr_method);
+    mrb_param = xmlrpc_value_to_mrb_value(mrb, self, mxsc->env, xr_param);
+    mrb_funcall(mrb, mrb_ret, "push", 1, mrb_method);
+    mrb_funcall(mrb, mrb_ret, "push", 1, mrb_param);
+    return mrb_ret;
+}/*}}}*/
+
+static mrb_value
+mrb_xmlrpc_server_serialize_xmlrpc_response(mrb_state *mrb, mrb_value self) {/*{{{*/
+    struct mrb_xmlrpc_server_context *mxsc = (struct mrb_xmlrpc_server_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "context"))));
+
+    mrb_value mrb_response;
+    mrb_get_args(mrb, "o", &mrb_response);
+    xmlrpc_mem_block * output = XMLRPC_MEMBLOCK_NEW(char, mxsc->env, 0);
+    xmlrpc_serialize_response(mxsc->env, output, mrb_value_to_xmlrpc_value(mrb, self, mxsc->env, mrb_response));
+    mrb_value mrb_ret = mrb_str_new_cstr(mrb,XMLRPC_MEMBLOCK_CONTENTS(char, output));
+    XMLRPC_MEMBLOCK_FREE(char, output);
+    return mrb_ret;
+}/*}}}*/
+
 void
-mrb_mruby_xmlrpc_client_gem_init(mrb_state* mrb) {
+mrb_mruby_xmlrpc_gem_init(mrb_state* mrb) {
     struct RClass *module_xmlrpc = mrb_define_module(mrb, "XMLRPC");
     struct RClass *class_xmlrpc_client = mrb_define_class_under(mrb,module_xmlrpc,"Client",mrb->object_class);
 
@@ -412,8 +556,23 @@ mrb_mruby_xmlrpc_client_gem_init(mrb_state* mrb) {
 
     mrb_define_method(mrb, class_xmlrpc_client, "call", mrb_xmlrpc_client_call, ARGS_REQ(1) && ARGS_REST());
     mrb_gc_arena_restore(mrb, ai);
+
+    struct RClass *class_xmlrpc_server = mrb_define_class_under(mrb,module_xmlrpc,"Server",mrb->object_class);
+
+    mrb_define_class_method(mrb, class_xmlrpc_server, "new", mrb_xmlrpc_server_init, ARGS_ANY());
+    //mrb_define_method(mrb, class_xmlrpc_server, "shutdown", mrb_xmlrpc_server_serve, ARGS_NONE());
+
+    mrb_define_method(mrb, class_xmlrpc_server, "host", mrb_xmlrpc_server_get_host, ARGS_NONE());
+    mrb_define_method(mrb, class_xmlrpc_server, "port", mrb_xmlrpc_server_get_port, ARGS_NONE());
+    mrb_define_method(mrb, class_xmlrpc_server, "maxConnections", mrb_xmlrpc_server_get_maxConnections, ARGS_NONE());
+
+    mrb_define_method(mrb, class_xmlrpc_server, "add_handler", mrb_xmlrpc_server_add_handler, ARGS_REQ(2));
+    mrb_define_method(mrb, class_xmlrpc_server, "set_default_handler", mrb_xmlrpc_server_set_default_handler, ARGS_REQ(1));
+    mrb_define_method(mrb, class_xmlrpc_server, "handlers", mrb_xmlrpc_server_get_handlers, ARGS_NONE());
+    mrb_define_method(mrb, class_xmlrpc_server, "parse_xmlrpc_call", mrb_xmlrpc_server_parse_xmlrpc_call, ARGS_REQ(1));
+    mrb_define_method(mrb, class_xmlrpc_server, "serialize_xmlrpc_response", mrb_xmlrpc_server_serialize_xmlrpc_response, ARGS_REQ(1));
 }
 
 void
-mrb_mruby_xmlrpc_client_gem_final(mrb_state* mrb) {
+mrb_mruby_xmlrpc_gem_final(mrb_state* mrb) {
 }
