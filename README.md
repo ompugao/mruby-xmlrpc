@@ -8,8 +8,7 @@ This gem depends on mruby-time and libxmlrpc-c.
     ### terminal 1
 
         $ cat xmlrpc_server.rb
-        require "xmlrpc/server"
-        s = XMLRPC::Server.new(8080)
+        s = XMLRPC::Server.new
         s.add_handler("michael.add") do |a,b|
             a + b
         end
@@ -18,7 +17,7 @@ This gem depends on mruby-time and libxmlrpc-c.
         end
         s.serve
 
-        $ ruby xmlrpc_server.rb
+        $ mruby xmlrpc_server.rb
 
     ### terminal 2
 

@@ -231,6 +231,12 @@ mrb_value_to_xmlrpc_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, mrb_v
                 }
                 break;
             }
+        case MRB_TT_FALSE:
+            ret = xmlrpc_bool_new(env,0);
+            break;
+        case MRB_TT_TRUE:
+            ret = xmlrpc_bool_new(env,1);
+            break;
         default:
             if (!strcmp(mrb_obj_classname(mrb, mrb_val), "Time")) {
                 ret = xmlrpc_datetime_new_sec(env,
@@ -503,6 +509,11 @@ static mrb_value
 mrb_xmlrpc_server_get_handlers(mrb_state* mrb, mrb_value self) {
     return OBJECT_GET(mrb,self,"handlers");
 }
+
+static mrb_value
+mrb_xmlrpc_server_get_default_handler(mrb_state* mrb, mrb_value self) {
+    return OBJECT_GET(mrb,self,"default_handler");
+}
 /*}}}*/
 
 static mrb_value
@@ -531,11 +542,16 @@ mrb_xmlrpc_server_serialize_xmlrpc_response(mrb_state *mrb, mrb_value self) {/*{
     struct mrb_xmlrpc_server_context *mxsc = (struct mrb_xmlrpc_server_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "context"))));
 
     mrb_value mrb_response;
+    mrb_value mrb_ret;
     mrb_get_args(mrb, "o", &mrb_response);
-    xmlrpc_mem_block * output = XMLRPC_MEMBLOCK_NEW(char, mxsc->env, 0);
-    xmlrpc_serialize_response(mxsc->env, output, mrb_value_to_xmlrpc_value(mrb, self, mxsc->env, mrb_response));
-    mrb_value mrb_ret = mrb_str_new_cstr(mrb,XMLRPC_MEMBLOCK_CONTENTS(char, output));
-    XMLRPC_MEMBLOCK_FREE(char, output);
+//    if (!mrb_bool(mrb_funcall(mrb, mrb_response, "==", 1, mrb_ary_new(mrb)))) {
+        xmlrpc_mem_block * output = XMLRPC_MEMBLOCK_NEW(char, mxsc->env, 0);
+        xmlrpc_serialize_response(mxsc->env, output, mrb_value_to_xmlrpc_value(mrb, self, mxsc->env, mrb_response));
+        mrb_ret = mrb_str_new_cstr(mrb,XMLRPC_MEMBLOCK_CONTENTS(char, output));
+        XMLRPC_MEMBLOCK_FREE(char, output);
+//    }else{
+//        mrb_ret = mrb_nil_value();
+//    }
     return mrb_ret;
 }/*}}}*/
 
@@ -568,6 +584,7 @@ mrb_mruby_xmlrpc_gem_init(mrb_state* mrb) {
 
     mrb_define_method(mrb, class_xmlrpc_server, "add_handler", mrb_xmlrpc_server_add_handler, ARGS_REQ(2));
     mrb_define_method(mrb, class_xmlrpc_server, "set_default_handler", mrb_xmlrpc_server_set_default_handler, ARGS_REQ(1));
+    mrb_define_method(mrb, class_xmlrpc_server, "default_handler", mrb_xmlrpc_server_get_default_handler, ARGS_NONE());
     mrb_define_method(mrb, class_xmlrpc_server, "handlers", mrb_xmlrpc_server_get_handlers, ARGS_NONE());
     mrb_define_method(mrb, class_xmlrpc_server, "parse_xmlrpc_call", mrb_xmlrpc_server_parse_xmlrpc_call, ARGS_REQ(1));
     mrb_define_method(mrb, class_xmlrpc_server, "serialize_xmlrpc_response", mrb_xmlrpc_server_serialize_xmlrpc_response, ARGS_REQ(1));
