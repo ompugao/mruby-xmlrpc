@@ -47,10 +47,10 @@ module XMLRPC
         c.read_start{|b|
           h = HTTP::Parser.new
           r = h.parse_request(b)
+          c.read_stop
 
           begin
             method, params = xmlrpc_server.parse_xmlrpc_call(r.body)
-            c.read_stop
 
             ret = xmlrpc_server.call_method(method,params)
 

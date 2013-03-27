@@ -151,8 +151,8 @@ xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrp
                     mrb_hash_set(mrb, ret, m_key, m_value);
                     mrb_gc_arena_restore(mrb, ai);
                 }
-                //xmlrpc_DECREF(xr_key);
-                //xmlrpc_DECREF(xr_value);
+                xmlrpc_DECREF(xr_key);
+                xmlrpc_DECREF(xr_value);
                 break;
             }
         case XMLRPC_TYPE_ARRAY:
@@ -358,7 +358,7 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
     mrb_free(mrb,hostname_full);
     xmlrpc_server_info_free(server_info);
     xmlrpc_DECREF(root_xml);
-    xmlrpc_DECREF(result_xml);
+    //xmlrpc_DECREF(result_xml);
     return result_mrbval;
 }
 /*}}}*/
@@ -547,12 +547,16 @@ mrb_xmlrpc_server_serialize_xmlrpc_response(mrb_state *mrb, mrb_value self) {/*{
 
     mrb_value mrb_response;
     mrb_value mrb_ret;
+    xmlrpc_value * xr_val;
     mrb_get_args(mrb, "o", &mrb_response);
+    xr_val = mrb_value_to_xmlrpc_value(mrb, self, mxsc->env, mrb_response);
 //    if (!mrb_bool(mrb_funcall(mrb, mrb_response, "==", 1, mrb_ary_new(mrb)))) {
         xmlrpc_mem_block * output = XMLRPC_MEMBLOCK_NEW(char, mxsc->env, 0);
-        xmlrpc_serialize_response(mxsc->env, output, mrb_value_to_xmlrpc_value(mrb, self, mxsc->env, mrb_response));
+        xmlrpc_serialize_response(mxsc->env, output, xr_val);
+        XMLRPC_MEMBLOCK_CONTENTS(char,output)[XMLRPC_MEMBLOCK_SIZE(char,output)] = '\0';
         mrb_ret = mrb_str_new_cstr(mrb,XMLRPC_MEMBLOCK_CONTENTS(char, output));
         XMLRPC_MEMBLOCK_FREE(char, output);
+        xmlrpc_DECREF(xr_val);
 //    }else{
 //        mrb_ret = mrb_nil_value();
 //    }
