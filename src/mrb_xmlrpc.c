@@ -243,6 +243,10 @@ mrb_value_to_xmlrpc_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, mrb_v
                         mrb_fixnum(mrb_funcall(mrb, mrb_val, "to_i", 0, NULL)));
                 break;
             }
+            if (!strcmp(mrb_obj_classname(mrb, mrb_val), "XMLRPC::FaultException")) {
+                ret = mrb_value_to_xmlrpc_value(mrb, self, env, mrb_funcall(mrb, mrb_val, "to_h",0,NULL));
+                break;
+            }
             mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
             ret = xmlrpc_nil_new(env);
             break;
