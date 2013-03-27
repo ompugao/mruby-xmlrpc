@@ -21,7 +21,11 @@ module XMLRPC
     end
 
     def to_s
-      "<?xml version=\"1.0\"?>\r\n<methodResponse>\r\n<fault><value>\r\n<struct>\r\n<member>\r\n<name>faultCode</name>\r\n<value><int>#{@faultCode}</int></value>\r\n</member>\r\n<member>\r\n<name>faultString</name>\r\n<value><string>#{@faultString}</string></value>\r\n</member>\r\n</struct>\r\n</value></fault>\r\n</methodResponse>\r\n"
+      self.to_h.to_s
+    end
+
+    def to_serial
+      "<?xml version=\"1.0\"?>\r\n<methodResponse>\r\n<fault><value>\r\n<struct>\r\n<member>\r\n<name>faultCode</name>\r\n<value><i4>#{@faultCode}</i4></value>\r\n</member>\r\n<member>\r\n<name>faultString</name>\r\n<value><string>#{@faultString}</string></value>\r\n</member>\r\n</struct>\r\n</value></fault>\r\n</methodResponse>\r\n"
     end
   end
 
@@ -56,9 +60,9 @@ module XMLRPC
 
             body = xmlrpc_server.serialize_xmlrpc_response(ret)
           rescue ::XMLRPC::FaultException => e
-            body = e.to_s
+            body = e.to_serial
           rescue => e
-            body = ::XMLRPC::FaultException.new(ERR_UNCAUGHT_EXCEPTION, "Uncaught exception #{e.message} in method #{method}").to_s
+            body = ::XMLRPC::FaultException.new(ERR_UNCAUGHT_EXCEPTION, "Uncaught exception #{e.message} in method #{method}").to_serial
           end
 
           if !r.headers.has_key?('Connection') || r.headers['Connection'] != 'Keep-Alive'

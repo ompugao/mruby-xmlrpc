@@ -24,8 +24,14 @@
 static void
 xmlrpc_raise_if_fault(mrb_state *mrb,xmlrpc_env * const env)
 {
+    mrb_value mrb_exception_args[2];
+    mrb_value mrb_exception;
     if (env->fault_occurred) {
-        mrb_raisef(mrb, E_RUNTIME_ERROR, "XMLRPC ERROR: %s (%d)",env->fault_string,env->fault_code); \
+        mrb_exception_args[0] = mrb_fixnum_value(env->fault_code);
+        mrb_exception_args[1] = mrb_str_new_cstr(mrb, env->fault_string);
+        //mrb_raisef(mrb, E_RUNTIME_ERROR, "XMLRPC ERROR: %s (%d)",env->fault_string,env->fault_code); 
+        mrb_exception = mrb_class_new_instance(mrb, 2, mrb_exception_args, E_XMLRPC_FAULTEXCEPTION);
+        mrb_exc_raise(mrb, mrb_exception);
     }
 }
 // ******** client ********
