@@ -265,7 +265,7 @@ mrb_value_to_xmlrpc_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, mrb_v
 static struct RClass *
 mrb_xmlrpc_client_class(mrb_state *mrb, mrb_value self)/*{{{*/
 {
-    struct RClass* _module_xmlrpc = mrb_class_get(mrb,"XMLRPC");
+    struct RClass* _module_xmlrpc = mrb_module_get(mrb,"XMLRPC");
     struct RClass* _class_xmlrpc_client = mrb_class_ptr(mrb_const_get(mrb,mrb_obj_value(_module_xmlrpc),mrb_intern_lit(mrb,"Client")));
     return _class_xmlrpc_client;
 }/*}}}*/
@@ -414,7 +414,7 @@ mrb_xmlrpc_client_set_path(mrb_state* mrb, mrb_value self) {
 
 static struct RClass *
 mrb_xmlrpc_server_class(mrb_state *mrb, mrb_value self) {/*{{{*/
-    struct RClass* _module_xmlrpc = mrb_class_get(mrb,"XMLRPC");
+    struct RClass* _module_xmlrpc = mrb_module_get(mrb,"XMLRPC");
     struct RClass* _class_xmlrpc_server = mrb_class_ptr(mrb_const_get(mrb,mrb_obj_value(_module_xmlrpc),mrb_intern_lit(mrb,"Server")));
     return _class_xmlrpc_server;
 }/*}}}*/
