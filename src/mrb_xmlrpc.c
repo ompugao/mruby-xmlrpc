@@ -96,7 +96,7 @@ xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrp
             {
                 double double_val;
                 xmlrpc_read_double(env, xmlrpc_val, &double_val);
-                ret = mrb_float_value(double_val);
+                ret = mrb_float_value(mrb, double_val);
                 break;
             }
         case XMLRPC_TYPE_BOOL:
@@ -116,7 +116,7 @@ xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrp
                 unsigned int usec_val;
                 xmlrpc_read_datetime_usec(env, xmlrpc_val, &time_val, &usec_val);
                 mrb_value time_class = mrb_vm_const_get(mrb, mrb_intern_lit(mrb, "Time"));
-                ret = mrb_funcall(mrb, time_class, "at", 2 , mrb_float_value(time_val), mrb_float_value(usec_val));
+                ret = mrb_funcall(mrb, time_class, "at", 2 , mrb_float_value(mrb, time_val), mrb_float_value(mrb, usec_val));
                 break;
             }
         case XMLRPC_TYPE_STRING:
