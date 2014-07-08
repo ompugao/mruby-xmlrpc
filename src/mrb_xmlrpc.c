@@ -13,13 +13,13 @@
 #include "mrb_xmlrpc.h"
 
 #define OBJECT_GET(mrb, instance, name) \
-  mrb_iv_get(mrb, instance, mrb_intern(mrb, name))
+  mrb_iv_get(mrb, instance, mrb_intern_lit(mrb, name))
 
 #define OBJECT_SET(mrb, instance, name, value) \
-  mrb_iv_set(mrb, instance, mrb_intern(mrb, name), value)
+  mrb_iv_set(mrb, instance, mrb_intern_lit(mrb, name), value)
 
 #define OBJECT_REMOVE(mrb, instance, name) \
-  mrb_iv_remove(mrb, instance, mrb_intern(mrb, name))
+  mrb_iv_remove(mrb, instance, mrb_intern_lit(mrb, name))
 
 static void
 xmlrpc_raise_if_fault(mrb_state *mrb,xmlrpc_env * const env)
@@ -96,7 +96,7 @@ xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrp
             {
                 double double_val;
                 xmlrpc_read_double(env, xmlrpc_val, &double_val);
-                ret = mrb_float_value(double_val);
+                ret = mrb_float_value(mrb, double_val);
                 break;
             }
         case XMLRPC_TYPE_BOOL:
@@ -115,8 +115,8 @@ xmlrpc_value_to_mrb_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, xmlrp
                 time_t time_val;
                 unsigned int usec_val;
                 xmlrpc_read_datetime_usec(env, xmlrpc_val, &time_val, &usec_val);
-                mrb_value time_class = mrb_vm_const_get(mrb, mrb_intern(mrb, "Time"));
-                ret = mrb_funcall(mrb, time_class, "at", 2 , mrb_float_value(time_val), mrb_float_value(usec_val));
+                mrb_value time_class = mrb_vm_const_get(mrb, mrb_intern_lit(mrb, "Time"));
+                ret = mrb_funcall(mrb, time_class, "at", 2 , mrb_float_value(mrb, time_val), mrb_float_value(mrb, usec_val));
                 break;
             }
         case XMLRPC_TYPE_STRING:
@@ -265,8 +265,8 @@ mrb_value_to_xmlrpc_value(mrb_state* mrb, mrb_value self, xmlrpc_env *env, mrb_v
 static struct RClass *
 mrb_xmlrpc_client_class(mrb_state *mrb, mrb_value self)/*{{{*/
 {
-    struct RClass* _module_xmlrpc = mrb_class_get(mrb,"XMLRPC");
-    struct RClass* _class_xmlrpc_client = mrb_class_ptr(mrb_const_get(mrb,mrb_obj_value(_module_xmlrpc),mrb_intern(mrb,"Client")));
+    struct RClass* _module_xmlrpc = mrb_module_get(mrb,"XMLRPC");
+    struct RClass* _class_xmlrpc_client = mrb_class_ptr(mrb_const_get(mrb,mrb_obj_value(_module_xmlrpc),mrb_intern_lit(mrb,"Client")));
     return _class_xmlrpc_client;
 }/*}}}*/
 
@@ -314,7 +314,7 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
 
     mrb_get_args(mrb,"S|*",&method,&argv,&argc);
 
-    struct mrb_xmlrpc_client_context *mxcc = (struct mrb_xmlrpc_client_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "context"))));
+    struct mrb_xmlrpc_client_context *mxcc = (struct mrb_xmlrpc_client_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"))));
     xmlrpc_env* env = (xmlrpc_env*)(mxcc->env);
     xmlrpc_client* client = (xmlrpc_client*)(mxcc->client);
     
@@ -330,20 +330,20 @@ mrb_xmlrpc_client_call(mrb_state *mrb, mrb_value self ) {/*{{{*/
     // setup hostname *{{{*/
     char protocol[9];
     //use ssl or not
-    if (mrb_type(mrb_iv_get(mrb, self, mrb_intern(mrb, "use_ssl"))) == MRB_TT_TRUE)
+    if (mrb_type(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "use_ssl"))) == MRB_TT_TRUE)
     {
         strcpy(protocol,"https://");
     }else{
         strcpy(protocol,"http://");
     }
     // strip the last '/'
-    char* hostname = mrb_str_to_cstr(mrb,mrb_iv_get(mrb, self, mrb_intern(mrb, "host")));
+    char* hostname = mrb_str_to_cstr(mrb,mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "host")));
     if ( hostname[strlen(hostname)-1] == '/') {
         hostname[strlen(hostname)-1] = '\0';
     }
 
     // get port string
-    char* port = mrb_str_to_cstr(mrb,mrb_funcall(mrb,mrb_iv_get(mrb, self, mrb_intern(mrb, "port")),"to_s",0,NULL));
+    char* port = mrb_str_to_cstr(mrb,mrb_funcall(mrb,mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "port")),"to_s",0,NULL));
 
     // concat
     char* hostname_full;
@@ -414,8 +414,8 @@ mrb_xmlrpc_client_set_path(mrb_state* mrb, mrb_value self) {
 
 static struct RClass *
 mrb_xmlrpc_server_class(mrb_state *mrb, mrb_value self) {/*{{{*/
-    struct RClass* _module_xmlrpc = mrb_class_get(mrb,"XMLRPC");
-    struct RClass* _class_xmlrpc_server = mrb_class_ptr(mrb_const_get(mrb,mrb_obj_value(_module_xmlrpc),mrb_intern(mrb,"Server")));
+    struct RClass* _module_xmlrpc = mrb_module_get(mrb,"XMLRPC");
+    struct RClass* _class_xmlrpc_server = mrb_class_ptr(mrb_const_get(mrb,mrb_obj_value(_module_xmlrpc),mrb_intern_lit(mrb,"Server")));
     return _class_xmlrpc_server;
 }/*}}}*/
 
@@ -458,7 +458,7 @@ mrb_xmlrpc_server_init(mrb_state *mrb, mrb_value self) {/*{{{*/
     mrb_int port = 8080;
     mrb_value host = mrb_str_new_cstr(mrb, "127.0.0.1");
     mrb_int maxConnections = 4;
-    mrb_value stdlog = mrb_gv_get(mrb, mrb_intern(mrb, "$stdout"));
+    mrb_value stdlog = mrb_gv_get(mrb, mrb_intern_lit(mrb, "$stdout"));
     mrb_value rest_argv;
     mrb_int rest_argc;
 
@@ -535,7 +535,7 @@ mrb_xmlrpc_server_parse_xmlrpc_call(mrb_state *mrb, mrb_value self) {/*{{{*/
     mrb_value mrb_ret = mrb_ary_new(mrb);
     const char *xr_method;
     xmlrpc_value *xr_param;
-    struct mrb_xmlrpc_server_context *mxsc = (struct mrb_xmlrpc_server_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "context"))));
+    struct mrb_xmlrpc_server_context *mxsc = (struct mrb_xmlrpc_server_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"))));
 
     mrb_get_args(mrb, "s", &xml_str, &xml_str_len);
     xmlrpc_parse_call(mxsc->env, xml_str, strlen(xml_str), &xr_method, &xr_param);
@@ -549,7 +549,7 @@ mrb_xmlrpc_server_parse_xmlrpc_call(mrb_state *mrb, mrb_value self) {/*{{{*/
 
 static mrb_value
 mrb_xmlrpc_server_serialize_xmlrpc_response(mrb_state *mrb, mrb_value self) {/*{{{*/
-    struct mrb_xmlrpc_server_context *mxsc = (struct mrb_xmlrpc_server_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern(mrb, "context"))));
+    struct mrb_xmlrpc_server_context *mxsc = (struct mrb_xmlrpc_server_context*)(DATA_PTR(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"))));
 
     mrb_value mrb_response;
     mrb_value mrb_ret;
